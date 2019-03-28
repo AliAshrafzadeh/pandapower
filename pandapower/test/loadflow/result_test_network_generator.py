@@ -7,6 +7,7 @@
 import pandapower as pp
 from pandapower.test.toolbox import add_grid_connection, create_test_line
 from pandapower.toolbox import nets_equal
+import numpy as np
 
 def result_test_network_generator2(net, sn_mva=1, skip_test_impedance=False):
     """ This is a generator for the result_test_network
@@ -469,7 +470,6 @@ def add_test_two_open_switches_on_deactive_line(net):
     pp.create_switch(net, b3, l2, et="l", closed=False)
     net.last_added_case = "test_two_open_switches_on_deactive_line"
     return net
-
 
 if __name__ == '__main__':
     from pandapower.test.consistency_checks import runpp_with_consistency_checks

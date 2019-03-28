@@ -36,7 +36,7 @@ from packaging import version
 import six
 
 from pandapower.pypower.idx_brch import F_BUS, T_BUS, BR_STATUS
-from pandapower.pypower.idx_bus import BUS_I, BUS_TYPE, NONE, PD, QD, VMIN, VMAX, PV
+from pandapower.pypower.idx_bus import BUS_I, BUS_TYPE, NONE, PD, QD, VMIN, VMAX, PV, VM
 from pandapower.pypower.idx_gen import PMIN, PMAX, QMIN, QMAX
 
 try:
@@ -307,25 +307,32 @@ def _check_connectivity(net, ppc):
     bus_from = ppc['branch'][br_status, F_BUS].real.astype(int)
     bus_to = ppc['branch'][br_status, T_BUS].real.astype(int)
     slacks = ppc['bus'][ppc['bus'][:, BUS_TYPE] == 3, BUS_I].astype(int)
-
+    init_vm = net._options["init_vm_pu"]
+    initialize_vm_from_slack = isinstance(init_vm, str) and init_vm == "slack"
+    nr_buses = ppc["bus"].shape[0]
     adj_matrix = sp.sparse.coo_matrix((np.ones(nobranch),
                                        (bus_from, bus_to)),
                                       shape=(nobus, nobus))
 
-    bus_not_reachable = np.ones(ppc["bus"].shape[0], dtype=bool)
+    bus_not_reachable = np.ones(nr_buses, dtype=bool)
     slack_set = set(slacks)
-    for slack in slacks:
+    init_vm_pu = np.full((nr_buses, len(slack_set)), np.nan)
+    for i, slack in enumerate(slacks):
         if ppc['bus'][slack, BUS_TYPE] == PV:
             continue
         reachable = sp.sparse.csgraph.breadth_first_order(adj_matrix, slack, False, False)
         bus_not_reachable[reachable] = False
+        init_vm_pu[reachable, i] = ppc["bus"][slack, VM]
         reach_set = set(reachable)
         intersection = slack_set & reach_set
         if net._options["mode"] == "opf" and len(intersection) > 1:
             # if slack is in reachable other slacks are connected to this one. Set it to Gen bus
             demoted_slacks = list(intersection - {slack})
             ppc['bus'][demoted_slacks, BUS_TYPE] = PV
-
+    if initialize_vm_from_slack:
+        connected = ~bus_not_reachable
+        ppc["bus"][connected, VM] = np.nanmean(init_vm_pu[connected], axis=1)
+        net._options["init_vm_pu"] = None
     isolated_nodes, pus, qus, ppc = _set_isolated_nodes_out_of_service(ppc, bus_not_reachable)
     return isolated_nodes, pus, qus
 
@@ -655,7 +662,10 @@ def _init_runpp_options(net, algorithm, calculate_voltage_angles, init,
         if init_va_degree is None or (isinstance(init_va_degree, str) and init_va_degree == "auto"):
             init_va_degree = "dc" if calculate_voltage_angles else "flat"
         if init_vm_pu is None or (isinstance(init_vm_pu, str) and init_vm_pu == "auto"):
-            init_vm_pu = (net.ext_grid.vm_pu.values.sum() + net.gen.vm_pu.values.sum()) / \
+            if check_connectivity:
+                init_vm_pu = "slack"
+            else:
+                init_vm_pu = (net.ext_grid.vm_pu.values.sum() + net.gen.vm_pu.values.sum()) / \
                          (len(net.ext_grid.vm_pu.values) + len(net.gen.vm_pu.values))
     elif init == "dc":
         init_vm_pu = "flat"

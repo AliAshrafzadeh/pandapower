@@ -232,8 +232,6 @@ def _build_bus_ppc(net, ppc):
     """
     Generates the ppc["bus"] array and the lookup pandapower indices -> ppc indices
     """
-    init_vm_pu = net["_options"]["init_vm_pu"]
-    init_va_degree = net["_options"]["init_va_degree"]
     mode = net["_options"]["mode"]
     numba = net["_options"]["numba"] if "numba" in net["_options"] else False
 
@@ -267,7 +265,8 @@ def _build_bus_ppc(net, ppc):
         bus_is_idx = _is_elements['bus_is_idx']
         bus_lookup = create_bus_lookup(net, bus_index, bus_is_idx,
                                        gen_is_mask, eg_is_mask, numba=numba)
-
+    net["_pd2ppc_lookups"]["aux"] = aux
+    net["_pd2ppc_lookups"]["bus"] = bus_lookup
     n_bus_ppc = len(bus_index)
     # init ppc with empty values
     ppc["bus"] = np.zeros(shape=(n_bus_ppc, bus_cols), dtype=float)
@@ -294,14 +293,7 @@ def _build_bus_ppc(net, ppc):
         in_service = net["bus"]["in_service"].values
     ppc["bus"][~in_service, BUS_TYPE] = NONE
     if mode != "nx":
-        set_reference_buses(net, ppc, bus_lookup)
-    vm_pu = get_voltage_init_vector(net, init_vm_pu, "magnitude")
-    if vm_pu is not None:
-        ppc["bus"][:n_bus, VM] = vm_pu
-
-    va_degree = get_voltage_init_vector(net, init_va_degree, "angle")
-    if va_degree is not None:
-        ppc["bus"][:n_bus, VA] = va_degree
+        set_reference_buses(net, ppc)
 
     if mode == "sc":
         _add_c_to_ppc(net, ppc)
@@ -317,15 +309,28 @@ def _build_bus_ppc(net, ppc):
             ppc["bus"][:n_bus, VMIN] = 0  # changes of VMIN must be considered in check_opf_data
 
     if len(net.xward):
-        _fill_auxiliary_buses(net, ppc, bus_lookup, "xward", "bus", aux)
+        _fill_auxiliary_buses(net, ppc, "xward", "bus")
 
     if len(net.trafo3w):
-        _fill_auxiliary_buses(net, ppc, bus_lookup, "trafo3w", "hv_bus", aux)
-    net["_pd2ppc_lookups"]["bus"] = bus_lookup
-    net["_pd2ppc_lookups"]["aux"] = aux
+        _fill_auxiliary_buses(net, ppc, "trafo3w", "hv_bus")
 
 
-def _fill_auxiliary_buses(net, ppc, bus_lookup, element, bus_column, aux):
+def _initialize_voltage_vector(net, ppc):
+    init_vm_pu = net["_options"]["init_vm_pu"]
+    init_va_degree = net["_options"]["init_va_degree"]
+    vm_pu = get_voltage_init_vector(net, init_vm_pu, "magnitude")
+    n_bus = len(net.bus.index)
+    if vm_pu is not None:
+        ppc["bus"][:n_bus, VM] = vm_pu
+
+    va_degree = get_voltage_init_vector(net, init_va_degree, "angle")
+    if va_degree is not None:
+        ppc["bus"][:n_bus, VA] = va_degree
+
+
+def _fill_auxiliary_buses(net, ppc, element, bus_column):
+    aux = net["_pd2ppc_lookups"]["aux"]
+    bus_lookup = net["_pd2ppc_lookups"]["bus"]
     element_bus_idx = bus_lookup[net[element][bus_column].values]
     aux_idx = bus_lookup[aux[element]]
     ppc["bus"][aux_idx, BASE_KV] = ppc["bus"][element_bus_idx, BASE_KV]
@@ -341,17 +346,23 @@ def _fill_auxiliary_buses(net, ppc, bus_lookup, element, bus_column, aux):
     else:
         ppc["bus"][aux_idx, VA] = ppc["bus"][element_bus_idx, VA]
 
-def set_reference_buses(net, ppc, bus_lookup):
-    eg_buses = bus_lookup[net.ext_grid.bus.values[net._is_elements["ext_grid"]]]
+def set_reference_buses(net, ppc):
+    bus_lookup = net["_pd2ppc_lookups"]["bus"]
+    eg_is = net._is_elements["ext_grid"]
+    eg_buses = bus_lookup[net.ext_grid.bus.values[eg_is]]
     ppc["bus"][eg_buses, BUS_TYPE] = REF
+    ppc["bus"][eg_buses, VM] = net.ext_grid.vm_pu.values[eg_is]
     gen_slacks = net._is_elements["gen"] & net.gen["slack"].values
     if gen_slacks.any():
         slack_buses = bus_lookup[net.gen["bus"].values[gen_slacks]]
         ppc["bus"][slack_buses, BUS_TYPE] = REF
+        ppc["bus"][slack_buses, VM] = net.gen["vm_pu"].values[gen_slacks]
     converter_is = net._is_elements["converter"]
     if converter_is.any():
         slack_buses = bus_lookup[net.converter["dc_bus"].values[converter_is]]
         ppc["bus"][slack_buses, BUS_TYPE] = REF
+        from pandapower.powerflow import _update_dc_converter_ratio
+        _update_dc_converter_ratio(net, ppc, on_init=True)
 
 def _calc_pq_elements_and_add_on_ppc(net, ppc):
     # init values

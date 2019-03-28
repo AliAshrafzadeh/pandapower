@@ -129,12 +129,8 @@ def _run_mixed_dc_and_ac_pf(net, ppci, **kwargs):
 def _update_dc_converter_ratio(net, ppc, on_init=False):
     bus_lookup = net._pd2ppc_lookups["bus"]
     converter_is = net._is_elements["converter"]
-    if on_init:
-        ac_buses = net.converter.bus.values[converter_is]
-        dc_buses = net.converter.dc_bus.values[converter_is]
-    else:
-        ac_buses = bus_lookup[net.converter.bus.values][converter_is]
-        dc_buses = bus_lookup[net.converter.dc_bus.values][converter_is]
+    ac_buses = bus_lookup[net.converter.bus.values][converter_is]
+    dc_buses = bus_lookup[net.converter.dc_bus.values][converter_is]
       
     base_ratios = ppc["bus"][ac_buses, BASE_KV] / ppc["bus"][dc_buses, BASE_KV]
     converter_ratios = net.converter.ratio.values[converter_is]

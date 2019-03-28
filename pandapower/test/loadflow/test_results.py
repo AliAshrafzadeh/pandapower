@@ -573,4 +573,17 @@ def test_converter():
     assert isclose(net.res_line_dc.at[0, "loading_percent"], 7.453686)
 
 if __name__ == "__main__":
+#    import numpy as np
+#    net = pp.create_empty_network()
+#    b0 = pp.create_bus(net, vn_kv=1.0)
+#    b1 = pp.create_bus(net, vn_kv=1.5)
+#    b2 = pp.create_bus(net, vn_kv=1.5)
+#    pp.create_ext_grid(net, b0, vm_pu=1.01)
+#    pp.create_converter(net, bus=b0, dc_bus=b1, ratio=3*np.sqrt(2)/np.pi)
+#    pp.create_converter(net, bus=b0, dc_bus=b1, ratio=3*np.sqrt(2)/np.pi, in_service=False)
+#    pp.create_line_dc_from_parameters(net, b1, b2, 1.5, r_ohm_per_km=0.2, max_i_ka=1.)
+#    pp.create_load(net, b2, p_mw=0.1)
+#    assert allclose(net.res_bus.vm_pu.values, [1.0099999905, 0.90931947073, 0.89441209798])
+#    assert isclose(net.res_line_dc.at[0, "loading_percent"], 7.453686)
+
     pytest.main(["-xs"])
