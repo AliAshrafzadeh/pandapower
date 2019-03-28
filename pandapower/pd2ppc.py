@@ -97,10 +97,7 @@ def _pd2ppc(net):
 
     if check_connectivity:
         # sets islands (multiple isolated nodes) out of service
-        if "opf" in mode:
-            isolated_nodes, _, _ = aux._check_connectivity_opf(ppc)
-        else:
-            isolated_nodes, _, _ = aux._check_connectivity(ppc)
+        isolated_nodes, _, _ = aux._check_connectivity(net, ppc)
         net["_is_elements"] = aux._select_is_elements_numba(net, isolated_nodes)
 
     # sets buses out of service, which aren't connected to branches / REF buses

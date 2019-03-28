@@ -30,6 +30,7 @@ def _get_branch_results(net, ppc, bus_lookup_aranged, pq_buses):
     _get_impedance_results(net, ppc, i_ft)
     _get_xward_branch_results(net, ppc, bus_lookup_aranged, pq_buses)
     _get_switch_results(net, i_ft)
+    _get_line_dc_results(net, ppc, i_ft)
 
 
 def _get_branch_flows(ppc):
@@ -97,6 +98,42 @@ def _get_line_results(net, ppc, i_ft):
         parallel = line_df.parallel.values
         res_line_df["r_ohm_per_km"] = ppc["branch"][f:t, BR_R].real / length_km * baseR * parallel
 
+def _get_line_dc_results(net, ppc, i_ft):
+    # create res_line_vals which are written to the pandas dataframe
+    ac = net["_options"]["ac"]
+
+    if not "line_dc" in net._pd2ppc_lookups["branch"]:
+        return
+    f, t = net._pd2ppc_lookups["branch"]["line_dc"]
+    
+    p_from_mw = ppc["branch"][f:t, PF].real
+    p_to_mw = ppc["branch"][f:t, PT].real
+
+    if ac:
+        pl_mw = p_from_mw + p_to_mw
+    else:
+        pl_mw = np.zeros_like(p_from_mw)
+
+    with np.errstate(invalid='ignore'):
+        i_ka = np.max(i_ft[f:t], axis=1) * np.sqrt(3)
+    i_from_ka = i_ft[f:t][:, 0]
+    i_to_ka = i_ft[f:t][:, 1]
+    line_df = net["line_dc"]
+    i_max = line_df["max_i_ka"].values * line_df["df"].values * line_df["parallel"].values
+    from_bus = ppc["branch"][f:t, F_BUS].real.astype(int)
+    to_bus = ppc["branch"][f:t, T_BUS].real.astype(int)
+
+    # write to line
+    res_line_df = net["res_line_dc"]
+    res_line_df["p_from_mw"].values[:] = p_from_mw
+    res_line_df["p_to_mw"].values[:] = p_to_mw
+    res_line_df["pl_mw"].values[:] = pl_mw
+    res_line_df["i_from_ka"].values[:] = i_from_ka
+    res_line_df["i_to_ka"].values[:] = i_to_ka
+    res_line_df["i_ka"].values[:] = i_ka
+    res_line_df["vm_from_pu"].values[:] = ppc["bus"][from_bus, VM]
+    res_line_df["vm_to_pu"].values[:] = ppc["bus"][to_bus, VM]
+    res_line_df["loading_percent"].values[:] = i_ka / i_max * 100
 
 def _get_trafo_results(net, ppc, s_ft, i_ft):
     ac = net["_options"]["ac"]

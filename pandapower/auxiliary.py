@@ -295,7 +295,7 @@ def _set_isolated_nodes_out_of_service(ppc, bus_not_reachable):
     return isolated_nodes, pus, qus, ppc
 
 
-def _check_connectivity_opf(ppc):
+def _check_connectivity(net, ppc):
     """
     Checks if the ppc contains isolated buses and changes slacks to PV nodes if multiple slacks are in net.
     :param ppc: pypower case file
@@ -321,42 +321,11 @@ def _check_connectivity_opf(ppc):
         bus_not_reachable[reachable] = False
         reach_set = set(reachable)
         intersection = slack_set & reach_set
-        if len(intersection) > 1:
+        if net._options["mode"] == "opf" and len(intersection) > 1:
             # if slack is in reachable other slacks are connected to this one. Set it to Gen bus
             demoted_slacks = list(intersection - {slack})
             ppc['bus'][demoted_slacks, BUS_TYPE] = PV
 
-    isolated_nodes, pus, qus, ppc = _set_isolated_nodes_out_of_service(ppc, bus_not_reachable)
-    return isolated_nodes, pus, qus
-
-
-def _check_connectivity(ppc):
-    """
-    Checks if the ppc contains isolated buses. If yes this isolated buses are set out of service
-    :param ppc: pypower case file
-    :return:
-    """
-    br_status = ppc['branch'][:, BR_STATUS] == True
-    nobranch = ppc['branch'][br_status, :].shape[0]
-    nobus = ppc['bus'].shape[0]
-    bus_from = ppc['branch'][br_status, F_BUS].real.astype(int)
-    bus_to = ppc['branch'][br_status, T_BUS].real.astype(int)
-    slacks = ppc['bus'][ppc['bus'][:, BUS_TYPE] == 3, BUS_I]
-
-    # we create a "virtual" bus thats connected to all slack nodes and start the connectivity
-    # search at this bus
-    bus_from = np.hstack([bus_from, slacks])
-    bus_to = np.hstack([bus_to, np.ones(len(slacks)) * nobus])
-
-    adj_matrix = sp.sparse.coo_matrix((np.ones(nobranch + len(slacks)),
-                                       (bus_from, bus_to)),
-                                      shape=(nobus + 1, nobus + 1))
-
-    reachable = sp.sparse.csgraph.breadth_first_order(adj_matrix, nobus, False, False)
-    # TODO: the former impl. excluded ppc buses that are already oos, but is this necessary ?
-    # if so: bus_not_reachable = np.hstack([ppc['bus'][:, BUS_TYPE] != 4, np.array([False])])
-    bus_not_reachable = np.ones(ppc["bus"].shape[0] + 1, dtype=bool)
-    bus_not_reachable[reachable] = False
     isolated_nodes, pus, qus, ppc = _set_isolated_nodes_out_of_service(ppc, bus_not_reachable)
     return isolated_nodes, pus, qus
 
@@ -395,7 +364,8 @@ def _select_is_elements_numba(net, isolated_nodes=None):
         set_isolated_buses_oos(bus_in_service, ppc_bus_isolated, net["_pd2ppc_lookups"]["bus"])
 
     is_elements = dict()
-    for element in ["load", "sgen", "gen", "ward", "xward", "shunt", "ext_grid", "storage"]:
+    for element in ["load", "sgen", "gen", "ward", "xward", "shunt",
+                    "ext_grid", "storage", "converter"]:
         len_ = len(net[element].index)
         element_in_service = np.zeros(len_, dtype=bool)
         if len_ > 0:

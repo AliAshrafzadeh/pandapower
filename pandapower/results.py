@@ -87,7 +87,8 @@ def get_elements_to_empty():
 
 
 def get_elements_to_init():
-    return ["line", "trafo", "trafo3w", "impedance", "ext_grid", "load", "sgen", "storage", "shunt", "gen", "ward", "xward", "dcline"]
+    return ["line", "trafo", "trafo3w", "impedance", "ext_grid", "load", "sgen", "storage",
+            "shunt", "gen", "ward", "xward", "dcline", "line_dc", "converter"]
 
 
 def reset_results(net):

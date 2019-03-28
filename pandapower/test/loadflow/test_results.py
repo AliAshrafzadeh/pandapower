@@ -5,7 +5,7 @@
 
 
 import pytest
-from numpy import in1d, isnan
+from numpy import in1d, isnan, allclose, isclose
 
 import pandapower as pp
 from pandapower.test.consistency_checks import runpp_with_consistency_checks
@@ -556,6 +556,21 @@ def test_open(result_test_network):
     lines = net['line'][in1d(net['line'].from_bus, buses.index) | in1d(net['line'].to_bus, buses.index)]
 
     assert isnan(net['res_line'].at[lines.index[1], "i_ka"])
+
+def test_converter():
+    import numpy as np
+    net = pp.create_empty_network()
+    b0 = pp.create_bus(net, vn_kv=1.0)
+    b1 = pp.create_bus(net, vn_kv=1.5)
+    b2 = pp.create_bus(net, vn_kv=1.5)
+    pp.create_ext_grid(net, b0, vm_pu=1.01)
+    pp.create_converter(net, bus=b0, dc_bus=b1, ratio=3*np.sqrt(2)/np.pi)
+    pp.create_converter(net, bus=b0, dc_bus=b1, ratio=3*np.sqrt(2)/np.pi, in_service=False)
+    pp.create_line_dc_from_parameters(net, b1, b2, 1.5, r_ohm_per_km=0.2, max_i_ka=1.)
+    pp.create_load(net, b2, p_mw=0.1)
+    pp.runpp(net)
+    assert allclose(net.res_bus.vm_pu.values, [1.0099999905, 0.90931947073, 0.89441209798])
+    assert isclose(net.res_line_dc.at[0, "loading_percent"], 7.453686)
 
 if __name__ == "__main__":
     pytest.main(["-xs"])

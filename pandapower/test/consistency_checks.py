@@ -27,7 +27,7 @@ def consistency_checks(net, rtol=1e-3):
 
 def indices_consistent(net):
     for element in ["bus", "load", "ext_grid", "sgen", "trafo", "trafo3w", "line", "shunt",
-                    "ward", "xward", "impedance", "gen", "dcline", "storage"]:
+                    "ward", "xward", "impedance", "gen", "dcline", "storage", "line_dc"]:
         e_idx = net[element].index
         res_idx = net["res_" + element].index
         assert len(e_idx) == len(res_idx), "length of %s bus and res_%s indices do not match"%(element, element)
@@ -45,7 +45,7 @@ def branch_loss_consistent_with_bus_feed_in(net, atol=1e-2):
 
     branch_loss_p = net.res_line.pl_mw.values.sum() + net.res_trafo.pl_mw.values.sum() + \
                     net.res_trafo3w.pl_mw.values.sum() + net.res_impedance.pl_mw.values.sum() + \
-                    net.res_dcline.pl_mw.values.sum()
+                    net.res_dcline.pl_mw.values.sum() + net.res_line_dc.pl_mw.sum()
     branch_loss_q = net.res_line.ql_mvar.values.sum() + net.res_trafo.ql_mvar.values.sum() + \
                     net.res_trafo3w.ql_mvar.values.sum() + net.res_impedance.ql_mvar.values.sum() + \
                     net.res_dcline.q_to_mvar.values.sum() + net.res_dcline.q_from_mvar.values.sum()

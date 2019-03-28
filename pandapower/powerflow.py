@@ -3,7 +3,8 @@
 # Copyright (c) 2016-2019 by University of Kassel and Fraunhofer Institute for Energy Economics
 # and Energy System Technology (IEE), Kassel. All rights reserved.
 
-from pandapower.pypower.idx_bus import VM
+from pandapower.pypower.idx_bus import VM, BASE_KV, PD
+from pandapower.pypower.idx_gen import PG, VG
 from pandapower.auxiliary import ppException, _clean_up, _add_auxiliary_elements
 from pandapower.pd2ppc import _pd2ppc, _update_ppc
 from pandapower.pf.run_bfswpf import _run_bfswpf
@@ -15,6 +16,7 @@ from pandapower.pypower.makeYbus import makeYbus as makeYbus_pypower
 from pandapower.pypower.pfsoln import pfsoln as pfsoln_pypower
 from pandapower.pf.ppci_variables import _get_pf_variables_from_ppci
 
+import numpy as np
 
 class AlgorithmUnknown(ppException):
     """
@@ -70,7 +72,10 @@ def _powerflow(net, **kwargs):
         kwargs["VERBOSE"] = 0
 
     # ----- run the powerflow -----
-    result = _run_pf_algorithm(ppci, net["_options"], **kwargs)
+    if len(net.converter):
+        result = _run_mixed_dc_and_ac_pf(net, ppci, **kwargs)
+    else:
+        result = _run_pf_algorithm(ppci, net["_options"], **kwargs)
 
     # ppci doesn't contain out of service elements, but ppc does -> copy results accordingly
     result = _copy_results_ppci_to_ppc(result, ppc, mode)
@@ -109,6 +114,36 @@ def _run_pf_algorithm(ppci, options, **kwargs):
 
     return result
 
+def _run_mixed_dc_and_ac_pf(net, ppci, **kwargs):
+    iterations = 0
+    for i in range(50):
+        result = _run_pf_algorithm(ppci, net["_options"], **kwargs)
+        iterations += result["iterations"]
+        if result["iterations"] == 0:
+            result["iterations"] = iterations
+            return result
+        _update_dc_converter_ratio(net, ppci)
+    result["success"] = False
+    return result
+    
+def _update_dc_converter_ratio(net, ppc, on_init=False):
+    bus_lookup = net._pd2ppc_lookups["bus"]
+    converter_is = net._is_elements["converter"]
+    if on_init:
+        ac_buses = net.converter.bus.values[converter_is]
+        dc_buses = net.converter.dc_bus.values[converter_is]
+    else:
+        ac_buses = bus_lookup[net.converter.bus.values][converter_is]
+        dc_buses = bus_lookup[net.converter.dc_bus.values][converter_is]
+      
+    base_ratios = ppc["bus"][ac_buses, BASE_KV] / ppc["bus"][dc_buses, BASE_KV]
+    converter_ratios = net.converter.ratio.values[converter_is]
+    dc_voltages = ppc["bus"][ac_buses, VM] * base_ratios * converter_ratios
+    ppc["bus"][dc_buses, VM] = dc_voltages
+    if not on_init:
+        converter_gens = np.arange(*net._gen_order["converter"])
+        ppc["gen"][converter_gens, VG] = dc_voltages
+        ppc["bus"][ac_buses, PD] = ppc["gen"][converter_gens, PG]
 
 def _pf_without_branches(ppci, options):
     Ybus, Yf, Yt = makeYbus_pypower(ppci["baseMVA"], ppci["bus"], ppci["branch"])

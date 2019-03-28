@@ -116,7 +116,7 @@ def _drop_aux_elements_for_bb_switch(net):
     for key in net.keys():
         if key.startswith('res_bus'):
             net[key] = net[key].loc[(net.bus.name != AUX_BUS_NAME).values, :]
-        if key.startswith('res_line'):
+        if key.startswith('res_line') and not key.startswith("res_line_dc"):
             net[key] = net[key].loc[(net.line.name != AUX_LINE_NAME).values, :]
     net.bus = net.bus.loc[(net.bus.name != AUX_BUS_NAME).values, :]
     net.line = net.line.loc[(net.line.name != AUX_LINE_NAME).values, :]

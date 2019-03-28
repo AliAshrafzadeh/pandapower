@@ -116,6 +116,16 @@ def create_empty_network(name="", f_hz=50., sn_mva=1, add_stdtypes=True):
                  ("parallel", "u4"),
                  ("type", dtype(object)),
                  ("in_service", 'bool')],
+        "line_dc": [("name", dtype(object)),
+                     ("std_type", dtype(object)),
+                     ("from_bus", "u4"),
+                     ("to_bus", "u4"),
+                     ("length_km", "f8"),
+                     ("r_ohm_per_km", "f8"),
+                     ("max_i_ka", "f8"),
+                     ("df", "f8"),
+                     ("parallel", "u4"),
+                     ("in_service", 'bool')],
         "trafo": [("name", dtype(object)),
                   ("std_type", dtype(object)),
                   ("hv_bus", "u4"),
@@ -209,7 +219,12 @@ def create_empty_network(name="", f_hz=50., sn_mva=1, add_stdtypes=True):
                   ("x_ohm", "f8"),
                   ("vm_pu", "f8"),
                   ("in_service", "bool")],
-        "measurement": [("name", dtype(object)),
+        "converter": [("name", dtype(object)),
+                      ("bus", "u4"),
+                      ("dc_bus", "u4"),
+                      ("ratio", "f8"),
+                      ("in_service", "bool")],
+      "measurement": [("name", dtype(object)),
                         ("measurement_type", dtype(object)),
                         ("element_type", dtype(object)),
                         ("element", "uint32"),
@@ -254,6 +269,15 @@ def create_empty_network(name="", f_hz=50., sn_mva=1, add_stdtypes=True):
                             ("vm_to_pu", "f8"),
                             ("va_to_degree", "f8"),
                             ("loading_percent", "f8")],
+        "_empty_res_line_dc":  [("p_from_mw", "f8"),
+                                ("p_to_mw", "f8"),
+                                ("pl_mw", "f8"),
+                                ("i_from_ka", "f8"),
+                                ("i_to_ka", "f8"),
+                                ("i_ka", "f8"),
+                                ("vm_from_pu", "f8"),
+                                ("vm_to_pu", "f8"),
+                                ("loading_percent", "f8")],
         "_empty_res_trafo": [("p_hv_mw", "f8"),
                              ("q_hv_mvar", "f8"),
                              ("p_lv_mw", "f8"),
@@ -289,6 +313,9 @@ def create_empty_network(name="", f_hz=50., sn_mva=1, add_stdtypes=True):
                                ("loading_percent", "f8")],
         "_empty_res_load": [("p_mw", "f8"),
                             ("q_mvar", "f8")],
+        "_empty_res_converter": [("p_ac_mw", "f8"),
+                                 ("q_ac_mvar", "f8"),
+                                 ("p_dc_mw", "f8")],
         "_empty_res_sgen": [("p_mw", "f8"),
                             ("q_mvar", "f8")],
         "_empty_res_storage": [("p_mw", "f8"),
@@ -2338,6 +2365,55 @@ def create_dcline(net, from_bus, to_bus, p_mw, loss_percent, loss_mw, vm_from_pu
     _preserve_dtypes(net.dcline, dtypes)
 
     return index
+
+def create_line_dc_from_parameters(net, from_bus, to_bus, length_km, r_ohm_per_km, max_i_ka,
+                                   index=None, parallel=1., df=1., in_service=True, name=None):
+
+    for bus in [from_bus, to_bus]:
+        if bus not in net["bus"].index.values:
+            raise UserWarning("Cannot attach to bus %s, bus does not exist" % bus)
+
+    if index is None:
+        index = get_free_id(net["line_dc"])
+
+    if index in net["line_dc"].index:
+        raise UserWarning("A dc line with the id %s already exists" % index)
+
+    # store dtypes
+    dtypes = net.line_dc.dtypes
+
+    net.line_dc.loc[index, ["name", "from_bus", "to_bus", "length_km", "r_ohm_per_km", "max_i_ka",
+                            "parallel", "df", "std_type", "in_service"]] \
+                            = [name, from_bus, to_bus, length_km, r_ohm_per_km, max_i_ka, parallel,
+                               df, None, in_service]
+
+    # and preserve dtypes
+    _preserve_dtypes(net.line_dc, dtypes)
+
+    return index
+
+def create_converter(net, bus, dc_bus, ratio, index=None, name=None, in_service=True):
+    for b in [bus, dc_bus]:
+        if b not in net["bus"].index.values:
+            raise UserWarning("Cannot attach to bus %s, bus does not exist" % bus)
+
+    if index is None:
+        index = get_free_id(net["converter"])
+
+    if index in net["converter"].index:
+        raise UserWarning("A converter with the id %s already exists" % index)
+
+    # store dtypes
+    dtypes = net.converter.dtypes
+
+    net.converter.loc[index, ["name", "bus", "dc_bus", "ratio", "in_service"]] \
+                           = [name, bus, dc_bus, ratio, in_service]
+
+    # and preserve dtypes
+    _preserve_dtypes(net.converter, dtypes)
+
+    return index
+
 
 
 def create_measurement(net, meas_type, element_type, value, std_dev, element, side=None,

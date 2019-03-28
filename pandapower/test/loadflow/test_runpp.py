@@ -312,7 +312,7 @@ def get_isolated(net):
                      enforce_q_lims=False, recycle=None)
 
     ppc, ppci = _pd2ppc(net)
-    return _check_connectivity(ppc)
+    return _check_connectivity(net, ppc)
 
 
 def test_connectivity_check_island_without_pv_bus():
@@ -788,7 +788,7 @@ def test_get_internal():
 
     J = _create_J_without_numba(Ybus, V, pvpq, pq)
 
-    assert sum(sum(abs(abs(J.toarray()) - abs(J_intern.toarray())))) < 0.05
+    assert np.allclose(J.toarray(), J_intern.toarray(), rtol=1e-2)
     # get J for all other algorithms
 
 

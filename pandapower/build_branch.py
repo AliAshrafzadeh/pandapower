@@ -57,13 +57,14 @@ def _build_branch_ppc(net, ppc):
         _calc_xward_parameter(net, ppc)
     if "switch" in lookup:
         _calc_switch_parameter(net, ppc)
-
+    if "line_dc" in lookup:
+        _calc_line_dc_parameter(net, ppc)
 
 def _initialize_branch_lookup(net):
     start = 0
     end = 0
     net._pd2ppc_lookups["branch"] = {}
-    for element in ["line", "trafo", "trafo3w", "impedance", "xward"]:
+    for element in ["line", "trafo", "trafo3w", "impedance", "xward", "line_dc"]:
         if len(net[element]) > 0:
             if element == "trafo3w":
                 end = start + len(net[element]) * 3
@@ -155,6 +156,36 @@ def _calc_line_parameter(net, ppc):
         max_i_ka = line.max_i_ka.values
         df = line.df.values
         branch[f:t, RATE_A] = max_load / 100. * max_i_ka * df * parallel * vr
+
+def _calc_line_dc_parameter(net, ppc):
+    """
+    calculates the line parameter in per unit.
+
+    **INPUT**:
+        **net** - The pandapower format network
+
+        **ppc** - the ppc array
+
+    **RETURN**:
+        **t** - Temporary line parameter. Which is a complex128
+                Nunmpy array. with the following order:
+                0:bus_a; 1:bus_b; 2:r_pu; 3:x_pu; 4:b_pu
+    """
+    f, t = net._pd2ppc_lookups["branch"]["line_dc"]
+    branch = ppc["branch"]
+    bus_lookup = net["_pd2ppc_lookups"]["bus"]
+    line = net["line_dc"]
+    from_bus = bus_lookup[line["from_bus"].values]
+    to_bus = bus_lookup[line["to_bus"].values]
+    length_km = line["length_km"].values
+    parallel = line["parallel"].values
+    base_kv = ppc["bus"][from_bus, BASE_KV]
+    baseR = np.square(base_kv) / net.sn_mva
+    branch[f:t, F_BUS] = from_bus
+    branch[f:t, T_BUS] = to_bus
+    branch[f:t, BR_R] = line["r_ohm_per_km"].values * length_km / baseR / parallel
+    branch[f:t, BR_STATUS] = line["in_service"].values
+
 
 
 def _calc_trafo_parameter(net, ppc):

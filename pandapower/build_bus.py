@@ -346,9 +346,12 @@ def set_reference_buses(net, ppc, bus_lookup):
     ppc["bus"][eg_buses, BUS_TYPE] = REF
     gen_slacks = net._is_elements["gen"] & net.gen["slack"].values
     if gen_slacks.any():
-        slack_buses = net.gen["bus"].values[gen_slacks]
-        ppc["bus"][bus_lookup[slack_buses], BUS_TYPE] = REF
-
+        slack_buses = bus_lookup[net.gen["bus"].values[gen_slacks]]
+        ppc["bus"][slack_buses, BUS_TYPE] = REF
+    converter_is = net._is_elements["converter"]
+    if converter_is.any():
+        slack_buses = bus_lookup[net.converter["dc_bus"].values[converter_is]]
+        ppc["bus"][slack_buses, BUS_TYPE] = REF
 
 def _calc_pq_elements_and_add_on_ppc(net, ppc):
     # init values

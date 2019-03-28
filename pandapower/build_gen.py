@@ -40,10 +40,12 @@ def _build_gen_ppc(net, ppc):
 
     f = add_gen_order(gen_order, "xward", _is_elements, f)
 
+    f = add_gen_order(gen_order, "converter", _is_elements, f)
+
     _init_ppc_gen(net, ppc, f)
+    net._gen_order = gen_order
     for element, (f,t) in gen_order.items():
         add_element_to_gen(net, ppc, element, f, t)
-    net._gen_order = gen_order
 
 def add_gen_order(gen_order, element, _is_elements, f):
     if element in _is_elements and _is_elements[element].any():
@@ -77,6 +79,8 @@ def add_element_to_gen(net, ppc, element, f, t):
         _build_pp_pq_element(net, ppc, "storage", f, t, inverted=True)
     elif element == "xward":
         _build_pp_xward(net, ppc, f, t)
+    elif element == "converter":
+        _build_pp_converter(net, ppc, f, t)        
     else:
         raise ValueError("Unknown element %s"%element)
 
@@ -89,6 +93,7 @@ def _build_pp_ext_grid(net, ppc, f, t):
     eg_buses = bus_lookup[net["ext_grid"]["bus"].values[eg_is]]
     ppc["gen"][f:t, GEN_BUS] = eg_buses
     ppc["gen"][f:t, VG] = net["ext_grid"]["vm_pu"].values[eg_is]
+
 
     # set bus values for external grid buses
     if calculate_voltage_angles:
@@ -156,11 +161,17 @@ def _build_pp_pq_element(net, ppc, element, f, t, inverted=False):
     ppc["gen"][f:t, QG] = sign * tab["q_mvar"].values[is_element] * tab["scaling"].values[is_element]
 
     # set bus values for controllable loads
-#    ppc["bus"][buses, BUS_TYPE] = PQ
     add_q_constraints(net, element, is_element, ppc, f, t, delta, inverted)
     add_p_constraints(net, element, is_element, ppc, f, t, delta, inverted)
 
+def _build_pp_converter(net, ppc, f, t):
+    gen_is = net._is_elements["converter"]
+    bus_lookup = net["_pd2ppc_lookups"]["bus"]
 
+    gen_buses = bus_lookup[net["converter"]["dc_bus"].values[gen_is]]
+    ppc["gen"][f:t, GEN_BUS] = gen_buses
+    ppc["gen"][f:t, VG] = ppc["bus"][gen_buses, VM]
+    
 def add_q_constraints(net, element, is_element, ppc, f, t, delta, inverted=False):
     tab = net[element]
     if "min_q_mvar" in tab.columns:
